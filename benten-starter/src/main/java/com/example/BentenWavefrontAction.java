@@ -7,15 +7,24 @@ import com.intuit.benten.common.annotations.ActionHandler;
 import com.intuit.benten.common.formatters.SlackFormatter;
 import com.intuit.benten.common.helpers.BentenMessageHelper;
 import com.intuit.benten.common.http.HttpHelper;
+import com.intuit.benten.converters.HtmlToImageConverter;
 import com.intuit.benten.common.nlp.BentenMessage;
 import com.google.gson.JsonElement;
+import java.nio.charset.StandardCharsets;
+import com.intuit.benten.common.actionhandlers.BentenSlackAttachment;
 import org.apache.http.HttpResponse;
+import com.pdfcrowd.*;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.URL;
+import org.apache.commons.io.FileUtils;
 import java.time.Instant;
+import java.io.*;
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.parser.JSONParser;
 import net.minidev.json.parser.ParseException;
-import java.util.Iterator;
+import java.util.*;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.http.client.methods.HttpGet;
@@ -27,6 +36,7 @@ import org.apache.http.params.HttpParams;
 import java.io.IOException;
 import net.minidev.json.parser.ParseException;
 import java.lang.InterruptedException;
+import  com.intuit.benten.common.actionhandlers.*;
 
 
 
@@ -42,8 +52,6 @@ public class BentenWavefrontAction implements BentenActionHandler {
         BentenHandlerResponse bentenHandlerResponse = new BentenHandlerResponse();
         BentenSlackResponse bentenSlackResponse = new BentenSlackResponse();
         bentenHandlerResponse.setBentenSlackResponse(bentenSlackResponse);
-        String application = BentenMessageHelper.getParameterAsString(bentenMessage, "application");
-
 
         try {
 
@@ -75,7 +83,6 @@ public class BentenWavefrontAction implements BentenActionHandler {
 
             String url="https://intuit.wavefront.com/api/v2/chart/api?";
             for (Map.Entry param : params.entrySet()) {
-                System.out.println("Key: "+param.getKey() + " & Value: " + param.getValue());
                 url=url+param.getKey()+"="+param.getValue()+"&";
             }
 
@@ -85,12 +92,7 @@ public class BentenWavefrontAction implements BentenActionHandler {
 
             HttpGet httpGet = new HttpGet(url);
             httpGet.setHeader("Authorization","Bearer c30c9ca6-e373-414d-ae1a-929024cbd79f");
-//            httpGet.setParams(params);
-
-
             HttpResponse httpResponse = httpHelper.getClient().execute(httpGet);
-//                String response12 = Integer.toString(httpResponse.getStatusLine().getStatusCode());
-
 
             String response12=EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
             JSONParser parser = new JSONParser();
@@ -113,6 +115,34 @@ public class BentenWavefrontAction implements BentenActionHandler {
                 response+="epoch time = "+arrOfStr[i]+", p98 = "+arrOfStr[i+1]+"\n";
             }
 
+            JSONObject obj=new JSONObject();
+            obj.put("type","bar");
+            JSONObject data = new JSONObject();
+            JSONArray labels = new JSONArray();
+            JSONArray datasets = new JSONArray();
+
+            JSONObject labelInDatasets=new JSONObject();
+            labelInDatasets.put("label","p98");
+            JSONArray dataInDatasets=new JSONArray();
+            for (int i=0;i<arrOfStr.length;i=i+2)
+            {
+                labels.add(arrOfStr[i]);
+                dataInDatasets.add(arrOfStr[i+1]);
+            }
+            labelInDatasets.put("data",dataInDatasets);
+
+            data.put("labels",labels );
+            datasets.add(labelInDatasets);
+            data.put("datasets", datasets);
+            obj.put("data", data);
+            String jsonEncoded=URLEncoder.encode(obj.toString(), StandardCharsets.UTF_8.toString());
+
+
+            BentenSlackAttachment bentenSlackAttachment = new BentenSlackAttachment();
+            bentenSlackAttachment.setText("Response Chart");
+            bentenSlackAttachment.setImage_url("https://quickchart.io/chart?bkg=white&c="+jsonEncoded);
+            List<BentenSlackAttachment> bentenSlackAttachmentList =new ArrayList<>();
+            bentenSlackAttachmentList.add(bentenSlackAttachment);
 
 //            Thread.sleep(1000);
 
@@ -122,6 +152,7 @@ public class BentenWavefrontAction implements BentenActionHandler {
 
             bentenSlackResponse.setSlackText(responseToSend);
             bentenMessage.getChannel().sendMessage(bentenHandlerResponse,bentenMessage.getChannelInformation());
+            bentenSlackResponse.setBentenSlackAttachments(bentenSlackAttachmentList);
             bentenSlackResponse.setSlackText("DONE");
 
         }
@@ -143,11 +174,8 @@ public class BentenWavefrontAction implements BentenActionHandler {
             bentenMessage.getChannel().sendMessage(bentenHandlerResponse,bentenMessage.getChannelInformation());
             bentenSlackResponse.setSlackText("DONE");
         }
-//        catch(InterruptedException e) {
-//            e.printStackTrace();
-//        }
         catch (Exception ex) {
-//            throw ex;
+            ex.printStackTrace();
             String responseToSend = SlackFormatter.create().text("Sorry couldn't send the response. Check the service name ")
                     .build();
 
