@@ -27,7 +27,7 @@ public class DialogFlowClientTest {
 
     @Before
     public void setup() {
-        nlpClient = new DialogFlowClient("project-id");
+        nlpClient = new DialogFlowClient("benten-agent-9fkm");
     }
 
     @Test

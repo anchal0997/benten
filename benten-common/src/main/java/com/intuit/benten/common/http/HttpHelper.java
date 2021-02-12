@@ -38,7 +38,7 @@ public class HttpHelper {
     private String proxyHost;
 
     @Autowired(required = false)
-    @Value("${benten.proxy.port:80}")
+    @Value("${benten.proxy.port:8080}")
     private int proxyPort;
 
     @Autowired(required = false)
